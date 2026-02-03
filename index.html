@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlashFlow - Study Smart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .card-inner { transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer; }
+        .card-flipped { transform: rotateY(180deg); }
+        .card-front, .card-back { backface-visibility: hidden; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .card-back { transform: rotateY(180deg); }
+        .progress-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin: 0 3px; }
+        input, select { transition: all 0.2s ease; border: 1px solid #e2e8f0; }
+        input:focus, select:focus { border-color: #6366f1; ring: 2px; ring-color: #6366f1; }
+        
+        /* Menu Dropdown Styles */
+        .item-menu-btn { position: relative; }
+        .item-menu-dropdown {
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            min-width: 140px;
+            z-index: 100;
+            overflow: hidden;
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0.95) translateY(-5px);
+            transition: all 0.15s ease;
+        }
+        .item-menu-dropdown.show {
+            opacity: 1;
+            visibility: visible;
+            transform: scale(1) translateY(0);
+        }
+        .item-menu-dropdown button {
+            width: 100%;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.15s;
+        }
+        .item-menu-dropdown button:hover { background: #f1f5f9; }
+        .item-menu-dropdown button.delete-btn { color: #ef4444; }
+        .item-menu-dropdown button.delete-btn:hover { background: #fef2f2; }
+        
+        /* Custom Dropdown Styles */
+        .custom-dropdown {
+            position: relative;
+            width: 100%;
+        }
+        .custom-dropdown-trigger {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            color: #1e293b;
+            transition: all 0.2s;
+        }
+        .custom-dropdown-trigger:hover { border-color: #cbd5e1; }
+        .custom-dropdown-trigger.open { border-color: #6366f1; border-radius: 12px 12px 0 0; }
+        .custom-dropdown-trigger .placeholder { color: #94a3b8; }
+        .custom-dropdown-trigger i { color: #94a3b8; transition: transform 0.2s; }
+        .custom-dropdown-trigger.open i { transform: rotate(180deg); }
+        .custom-dropdown-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #6366f1;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 50;
+            display: none;
+        }
+        .custom-dropdown.open .custom-dropdown-list { display: block; }
+        .custom-dropdown-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+        .custom-dropdown-item:hover { background: #f1f5f9; }
+        .custom-dropdown-item.selected { background: #eef2ff; color: #6366f1; font-weight: 500; }
+        .custom-dropdown-item.create-btn {
+            color: #6366f1;
+            font-weight: 600;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .custom-dropdown-item.create-btn:hover { background: #eef2ff; }
+        
+        /* Create New Form (appears below dropdown when clicked) */
+        .create-new-form {
+            display: none;
+            margin-top: 12px;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #f8fafc;
+        }
+        .create-new-form.show { display: block; }
+        .create-new-form input {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 10px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        .create-new-form input:focus { border-color: #6366f1; outline: none; }
+        .create-new-form .form-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .create-new-form .form-buttons button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .create-new-form .btn-cancel {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+        .create-new-form .btn-cancel:hover { background: #e2e8f0; }
+        .create-new-form .btn-save {
+            background: #1e293b;
+            color: white;
+        }
+        .create-new-form .btn-save:hover { background: #0f172a; }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+
+    <nav class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 p-4 flex items-center justify-between">
+        <div id="nav-left" class="flex items-center gap-3">
+            <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">FlashFlow</h1>
+        </div>
+        <div id="nav-breadcrumb" class="text-xs uppercase tracking-widest text-gray-400 font-bold">Home</div>
+    </nav>
+
+    <main id="app-container" class="p-4 pb-24 max-w-2xl mx-auto"></main>
+
+    <button id="fab" class="fixed bottom-8 right-8 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center text-2xl z-50 hover:scale-110 active:scale-95 transition-all">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <div id="fab-menu" class="fixed inset-0 bg-slate-900/20 hidden z-[60] backdrop-blur-sm" onclick="toggleFabMenu()">
+        <div class="absolute bottom-24 right-8 flex flex-col gap-3 items-end" onclick="event.stopPropagation()">
+            <button onclick="openModal('card')" id="btn-add-card" class="bg-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-slate-700 font-semibold hover:bg-indigo-50 transition-colors"><i class="fas fa-sticky-note text-indigo-500"></i> New Card</button>
+            <button onclick="openModal('deck')" id="btn-add-deck" class="bg-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-slate-700 font-semibold hover:bg-indigo-50 transition-colors"><i class="fas fa-layer-group text-indigo-500"></i> New Deck</button>
+            <button onclick="openModal('folder')" id="btn-add-folder" class="bg-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-slate-700 font-semibold hover:bg-indigo-50 transition-colors"><i class="fas fa-folder text-indigo-500"></i> New Folder</button>
+        </div>
+    </div>
+
+    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/60 hidden z-[70] items-center justify-center p-4 backdrop-blur-md" onclick="closeModal()">
+        <div class="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
+            <h2 id="modal-title" class="text-2xl font-extrabold text-slate-800 mb-6">Create</h2>
+            <div id="modal-content" class="space-y-4"></div>
+            <div class="flex gap-3 mt-8">
+                <button onclick="closeModal()" class="flex-1 py-4 text-slate-500 font-bold bg-slate-100 rounded-2xl hover:bg-slate-200 transition-colors">Discard</button>
+                <button onclick="saveItem()" class="flex-1 py-4 text-white font-bold bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let state = JSON.parse(localStorage.getItem('ff_v2')) || { folders: [] };
+        let currentPath = { folderId: null, deckId: null, view: 'home' };
+        let practiceSession = { cards: [], currentIndex: 0, results: [] };
+        let modalMode = '';
+
+        const saveState = () => localStorage.setItem('ff_v2', JSON.stringify(state));
+
+        function navigate(view, fId = null, dId = null) {
+            currentPath = { view, folderId: fId, deckId: dId };
+            render();
+        }
+
+        function goBack() {
+            if (currentPath.view === 'practice') navigate('deck', currentPath.folderId, currentPath.deckId);
+            else if (currentPath.view === 'deck') navigate('folder', currentPath.folderId);
+            else if (currentPath.view === 'folder') navigate('home');
+        }
+
+        function toggleFabMenu() {
+            document.getElementById('fab-menu').classList.toggle('hidden');
+        }
+
+        // --- MODAL LOGIC ---
+        let dropdownState = { folder: { value: '', isCreating: false }, deck: { value: '', isCreating: false } };
+
+        function openModal(mode) {
+            modalMode = mode;
+            toggleFabMenu();
+            dropdownState = { folder: { value: currentPath.folderId || '', isCreating: false }, deck: { value: currentPath.deckId || '', isCreating: false } };
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            const title = document.getElementById('modal-title');
+            
+            overlay.classList.replace('hidden', 'flex');
+            content.innerHTML = '';
+
+            if (mode === 'folder') {
+                title.innerText = "New Folder";
+                content.innerHTML = `<input type="text" id="inp-folder-name" placeholder="Folder Name" class="w-full p-4 rounded-xl outline-none bg-slate-50">`;
+            } 
+            else if (mode === 'deck') {
+                title.innerText = "New Deck";
+                content.innerHTML = `
+                    ${renderCustomDropdown('folder', 'Select Folder', state.folders, currentPath.folderId)}
+                    <input type="text" id="inp-deck-name" placeholder="Deck Name" class="w-full p-4 rounded-xl bg-slate-50 mt-3">
+                `;
+            } 
+            else if (mode === 'card') {
+                title.innerText = "New Card";
+                content.innerHTML = `
+                    <input type="text" id="inp-front" placeholder="Front Text" class="w-full p-4 rounded-xl bg-slate-50 mb-2">
+                    <input type="text" id="inp-back" placeholder="Back Text" class="w-full p-4 rounded-xl bg-slate-50 mb-4">
+                    
+                    <label class="text-xs font-bold text-slate-400 uppercase">Location</label>
+                    ${renderCustomDropdown('folder', 'Select Folder', state.folders, currentPath.folderId)}
+                    <div class="mt-3">${renderCustomDropdown('deck', 'Select Deck', [], currentPath.deckId)}</div>
+                `;
+                if(currentPath.folderId) updateDeckDropdown();
+            }
+        }
+
+        function renderCustomDropdown(type, placeholder, items, selectedId) {
+            const selectedItem = items.find(i => i.id === selectedId);
+            const displayText = selectedItem ? selectedItem.name : `<span class="placeholder">${placeholder}</span>`;
+            const typeName = type.charAt(0).toUpperCase() + type.slice(1);
+            
+            return `
+                <div class="custom-dropdown-wrapper" id="dropdown-wrapper-${type}">
+                    <div class="custom-dropdown" id="dropdown-${type}" onclick="event.stopPropagation()">
+                        <div class="custom-dropdown-trigger" onclick="toggleCustomDropdown('${type}')">
+                            <span id="dropdown-${type}-text">${displayText}</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="custom-dropdown-list">
+                            ${items.map(item => `
+                                <div class="custom-dropdown-item ${item.id === selectedId ? 'selected' : ''}" 
+                                     onclick="selectDropdownItem('${type}', '${item.id}', '${item.name.replace(/'/g, "\\'")}')">
+                                    ${item.name}
+                                </div>
+                            `).join('')}
+                            <div class="custom-dropdown-item create-btn" onclick="showCreateForm('${type}')">
+                                <i class="fas fa-plus"></i> Create New ${typeName}
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="sel-${type}" value="${selectedId || ''}">
+                    <div class="create-new-form" id="create-form-${type}">
+                        <input type="text" id="inp-new-${type}" placeholder="${typeName} Name" 
+                               onkeypress="if(event.key==='Enter'){saveCreateForm('${type}')}">
+                        <div class="form-buttons">
+                            <button type="button" class="btn-cancel" onclick="cancelCreateForm('${type}')">Cancel</button>
+                            <button type="button" class="btn-save" onclick="saveCreateForm('${type}')">Save</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleCustomDropdown(type) {
+            const dropdown = document.getElementById(`dropdown-${type}`);
+            const trigger = dropdown.querySelector('.custom-dropdown-trigger');
+            const wasOpen = dropdown.classList.contains('open');
+            
+            // Close all dropdowns first
+            document.querySelectorAll('.custom-dropdown').forEach(d => {
+                d.classList.remove('open');
+                d.querySelector('.custom-dropdown-trigger').classList.remove('open');
+            });
+            
+            if (!wasOpen) {
+                dropdown.classList.add('open');
+                trigger.classList.add('open');
+            }
+        }
+
+        function selectDropdownItem(type, id, name) {
+            document.getElementById(`sel-${type}`).value = id;
+            document.getElementById(`dropdown-${type}-text`).innerHTML = name;
+            dropdownState[type] = { value: id, isCreating: false };
+            
+            // Close dropdown
+            const dropdown = document.getElementById(`dropdown-${type}`);
+            dropdown.classList.remove('open');
+            dropdown.querySelector('.custom-dropdown-trigger').classList.remove('open');
+            
+            // Hide create form if visible
+            document.getElementById(`create-form-${type}`)?.classList.remove('show');
+            
+            // Update deck dropdown if folder changed
+            if (type === 'folder') updateDeckDropdown();
+        }
+
+        function showCreateForm(type) {
+            event.stopPropagation();
+            // Close dropdown
+            const dropdown = document.getElementById(`dropdown-${type}`);
+            dropdown.classList.remove('open');
+            dropdown.querySelector('.custom-dropdown-trigger').classList.remove('open');
+            
+            // Show create form
+            const form = document.getElementById(`create-form-${type}`);
+            form.classList.add('show');
+            document.getElementById(`inp-new-${type}`).focus();
+            dropdownState[type].isCreating = true;
+        }
+
+        function cancelCreateForm(type) {
+            document.getElementById(`create-form-${type}`).classList.remove('show');
+            document.getElementById(`inp-new-${type}`).value = '';
+            dropdownState[type].isCreating = false;
+        }
+
+        function saveCreateForm(type) {
+            const input = document.getElementById(`inp-new-${type}`);
+            const name = input.value.trim();
+            if (!name) return alert(`${type.charAt(0).toUpperCase() + type.slice(1)} name required`);
+            
+            // Mark as creating new
+            document.getElementById(`sel-${type}`).value = 'NEW_' + type.toUpperCase();
+            document.getElementById(`dropdown-${type}-text`).innerHTML = `<i class="fas fa-plus text-indigo-500 mr-2"></i>${name}`;
+            
+            // Hide create form
+            document.getElementById(`create-form-${type}`).classList.remove('show');
+            
+            if (type === 'folder') updateDeckDropdown();
+        }
+
+        function updateDeckDropdown() {
+            const deckContainer = document.querySelector('#dropdown-wrapper-deck')?.parentElement;
+            if (!deckContainer) return;
+            
+            const folderId = document.getElementById('sel-folder')?.value;
+            let decks = [];
+            
+            if (folderId && folderId !== 'NEW_FOLDER') {
+                const folder = state.folders.find(f => f.id === folderId);
+                if (folder) decks = folder.decks;
+            }
+            
+            deckContainer.innerHTML = renderCustomDropdown('deck', 'Select Deck', decks, currentPath.deckId);
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.custom-dropdown').forEach(d => {
+                d.classList.remove('open');
+                d.querySelector('.custom-dropdown-trigger')?.classList.remove('open');
+            });
+        });
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.replace('flex', 'hidden');
+            editingItem = null;
+        }
+
+        let editingItem = null; // { type: 'folder'|'deck'|'card', id, folderId?, deckId? }
+
+        // --- ITEM MENU LOGIC ---
+        function toggleItemMenu(event, menuId) {
+            event.stopPropagation();
+            // Close all other menus first
+            document.querySelectorAll('.item-menu-dropdown.show').forEach(m => {
+                if (m.id !== menuId) m.classList.remove('show');
+            });
+            document.getElementById(menuId).classList.toggle('show');
+        }
+
+        // Close menus when clicking outside
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.item-menu-dropdown.show').forEach(m => m.classList.remove('show'));
+        });
+
+        function openEditModal(type, id, folderId = null, deckId = null) {
+            event?.stopPropagation();
+            // Close all dropdown menus
+            document.querySelectorAll('.item-menu-dropdown.show').forEach(m => m.classList.remove('show'));
+            
+            editingItem = { type, id, folderId, deckId };
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            const title = document.getElementById('modal-title');
+            
+            overlay.classList.replace('hidden', 'flex');
+            
+            if (type === 'folder') {
+                const folder = state.folders.find(f => f.id === id);
+                title.innerText = "Edit Folder";
+                content.innerHTML = `<input type="text" id="inp-edit-name" placeholder="Folder Name" value="${folder.name}" class="w-full p-4 rounded-xl outline-none bg-slate-50">`;
+            } else if (type === 'deck') {
+                const folder = state.folders.find(f => f.id === folderId);
+                const deck = folder.decks.find(d => d.id === id);
+                title.innerText = "Edit Deck";
+                content.innerHTML = `<input type="text" id="inp-edit-name" placeholder="Deck Name" value="${deck.name}" class="w-full p-4 rounded-xl outline-none bg-slate-50">`;
+            } else if (type === 'card') {
+                const folder = state.folders.find(f => f.id === folderId);
+                const deck = folder.decks.find(d => d.id === deckId);
+                const card = deck.cards.find(c => c.id === id);
+                title.innerText = "Edit Card";
+                content.innerHTML = `
+                    <input type="text" id="inp-edit-front" placeholder="Front Text" value="${card.front}" class="w-full p-4 rounded-xl bg-slate-50 mb-2">
+                    <input type="text" id="inp-edit-back" placeholder="Back Text" value="${card.back}" class="w-full p-4 rounded-xl bg-slate-50">
+                `;
+            }
+        }
+
+        function deleteItem(type, id, folderId = null, deckId = null) {
+            event?.stopPropagation();
+            const confirmMsg = type === 'folder' ? 'Delete this folder and all its decks?' 
+                : type === 'deck' ? 'Delete this deck and all its cards?' 
+                : 'Delete this card?';
+            
+            if (!confirm(confirmMsg)) return;
+            
+            if (type === 'folder') {
+                state.folders = state.folders.filter(f => f.id !== id);
+            } else if (type === 'deck') {
+                const folder = state.folders.find(f => f.id === folderId);
+                folder.decks = folder.decks.filter(d => d.id !== id);
+            } else if (type === 'card') {
+                const folder = state.folders.find(f => f.id === folderId);
+                const deck = folder.decks.find(d => d.id === deckId);
+                deck.cards = deck.cards.filter(c => c.id !== id);
+            }
+            
+            saveState();
+            render();
+        }
+
+        function saveItem() {
+            // Handle edit mode
+            if (editingItem) {
+                const name = document.getElementById('inp-edit-name')?.value;
+                
+                if (editingItem.type === 'folder') {
+                    if (!name) return alert("Folder name required");
+                    const folder = state.folders.find(f => f.id === editingItem.id);
+                    folder.name = name;
+                } else if (editingItem.type === 'deck') {
+                    if (!name) return alert("Deck name required");
+                    const folder = state.folders.find(f => f.id === editingItem.folderId);
+                    const deck = folder.decks.find(d => d.id === editingItem.id);
+                    deck.name = name;
+                } else if (editingItem.type === 'card') {
+                    const front = document.getElementById('inp-edit-front').value;
+                    const back = document.getElementById('inp-edit-back').value;
+                    if (!front || !back) return alert("All fields required");
+                    const folder = state.folders.find(f => f.id === editingItem.folderId);
+                    const deck = folder.decks.find(d => d.id === editingItem.deckId);
+                    const card = deck.cards.find(c => c.id === editingItem.id);
+                    card.front = front;
+                    card.back = back;
+                }
+                
+                saveState();
+                closeModal();
+                render();
+                return;
+            }
+
+            const uid = () => Math.random().toString(36).substr(2, 9);
+            
+            let targetFolder, targetDeck;
+
+            // Resolve Folder
+            const fVal = document.getElementById('sel-folder')?.value;
+            if (fVal === 'NEW_FOLDER' || modalMode === 'folder') {
+                const name = document.getElementById('inp-new-folder')?.value || document.getElementById('inp-folder-name')?.value;
+                if (!name) return alert("Folder name required");
+                targetFolder = { id: uid(), name, decks: [] };
+                state.folders.push(targetFolder);
+            } else if (fVal) {
+                targetFolder = state.folders.find(f => f.id === fVal);
+            }
+
+            // Resolve Deck
+            const dVal = document.getElementById('sel-deck')?.value;
+            if (dVal === 'NEW_DECK' || modalMode === 'deck') {
+                const name = document.getElementById('inp-new-deck')?.value || document.getElementById('inp-deck-name')?.value;
+                if (!name) return alert("Deck name required");
+                targetDeck = { id: uid(), name, cards: [] };
+                targetFolder.decks.push(targetDeck);
+            } else if (dVal) {
+                targetDeck = targetFolder.decks.find(d => d.id === dVal);
+            }
+
+            // Save Card
+            if (modalMode === 'card') {
+                const front = document.getElementById('inp-front').value;
+                const back = document.getElementById('inp-back').value;
+                if (!front || !back || !targetDeck) return alert("All fields required");
+                if (targetDeck.cards.length >= 10) return alert("Deck full (Max 10)");
+                targetDeck.cards.push({ 
+                    id: uid(), 
+                    front, 
+                    back, 
+                    interval: 0,      // days until next review
+                    ease: 2.5,        // ease factor
+                    nextReview: null, // next review timestamp
+                    reviews: 0        // total reviews
+                });
+            }
+
+            saveState();
+            closeModal();
+            render();
+        }
+
+        // --- RENDERING ---
+        function render() {
+            const container = document.getElementById('app-container');
+            const navLeft = document.getElementById('nav-left');
+            const breadcrumb = document.getElementById('nav-breadcrumb');
+            
+            // Adjust FAB buttons visibility based on view
+            document.getElementById('btn-add-folder').style.display = currentPath.view === 'home' ? 'flex' : 'none';
+            document.getElementById('btn-add-deck').style.display = (currentPath.view === 'home' || currentPath.view === 'folder') ? 'flex' : 'none';
+
+            navLeft.innerHTML = currentPath.view === 'home' ? `<h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">FlashFlow</h1>` : `<button onclick="goBack()" class="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center -ml-2"><i class="fas fa-chevron-left text-indigo-600"></i></button>`;
+
+            if (currentPath.view === 'home') {
+                breadcrumb.innerText = "Folders";
+                container.innerHTML = `<div class="grid gap-4">${state.folders.map(f => `
+                    <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md hover:border-indigo-100 transition-all relative">
+                        <div class="flex items-center gap-5 flex-1" onclick="navigate('folder', '${f.id}')">
+                            <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center text-xl"><i class="fas fa-folder"></i></div>
+                            <div><h3 class="font-bold text-slate-800">${f.name}</h3><p class="text-xs font-bold text-slate-400 uppercase tracking-tighter">${f.decks.length} Decks</p></div>
+                        </div>
+                        <div class="item-menu-btn">
+                            <button onclick="toggleItemMenu(event, 'menu-folder-${f.id}')" class="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div id="menu-folder-${f.id}" class="item-menu-dropdown">
+                                <button onclick="openEditModal('folder', '${f.id}')"><i class="fas fa-pen text-slate-400"></i> Edit</button>
+                                <button onclick="deleteItem('folder', '${f.id}')" class="delete-btn"><i class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}</div>`;
+                if(!state.folders.length) container.innerHTML = `<div class="py-20 text-center opacity-30"><i class="fas fa-box-open text-6xl mb-4"></i><p>Empty workspace</p></div>`;
+            } 
+            else if (currentPath.view === 'folder') {
+                const folder = state.folders.find(f => f.id === currentPath.folderId);
+                breadcrumb.innerText = folder.name;
+                container.innerHTML = `<div class="grid gap-4">${folder.decks.map(d => `
+                    <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm cursor-pointer hover:border-indigo-100 transition-all relative">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="flex-1" onclick="navigate('deck', '${folder.id}', '${d.id}')">
+                                <h3 class="font-bold text-slate-800">${d.name}</h3>
+                                <span class="text-xs font-black text-indigo-600">${d.cards.length}/10</span>
+                            </div>
+                            <div class="item-menu-btn">
+                                <button onclick="toggleItemMenu(event, 'menu-deck-${d.id}')" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <div id="menu-deck-${d.id}" class="item-menu-dropdown">
+                                    <button onclick="openEditModal('deck', '${d.id}', '${folder.id}')"><i class="fas fa-pen text-slate-400"></i> Edit</button>
+                                    <button onclick="deleteItem('deck', '${d.id}', '${folder.id}')" class="delete-btn"><i class="fas fa-trash"></i> Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden" onclick="navigate('deck', '${folder.id}', '${d.id}')">
+                            <div class="bg-indigo-500 h-full transition-all duration-500" style="width: ${(d.cards.length/10)*100}%"></div>
+                        </div>
+                    </div>
+                `).join('')}</div>`;
+            }
+            else if (currentPath.view === 'deck') {
+                const folder = state.folders.find(f => f.id === currentPath.folderId);
+                const deck = folder.decks.find(d => d.id === currentPath.deckId);
+                breadcrumb.innerText = deck.name;
+                
+                const now = Date.now();
+                const dueCards = deck.cards.filter(c => c.nextReview && c.nextReview <= now);
+                const newCards = deck.cards.filter(c => c.reviews === 0 || c.interval === 0);
+                const learnedCards = deck.cards.filter(c => c.nextReview && c.nextReview > now);
+                const hasDueCards = dueCards.length > 0 || newCards.length > 0;
+                
+                container.innerHTML = `
+                    <button onclick="startPractice('${deck.id}')" class="w-full py-5 ${hasDueCards ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300'} text-white rounded-3xl font-black shadow-xl shadow-indigo-100 mb-4 transition-all" ${!hasDueCards ? 'disabled' : ''}>
+                        ${hasDueCards ? 'PRACTICE NOW' : 'ALL CAUGHT UP!'}
+                    </button>
+                    ${hasDueCards ? `<p class="text-center text-sm text-slate-500 mb-8">${dueCards.length + newCards.length} cards to review</p>` : '<p class="text-center text-sm text-emerald-600 mb-8">No cards due today</p>'}
+                    <div class="space-y-8">
+                        ${renderDeckSection('Due Today', dueCards, 'bg-amber-50 text-amber-600', folder.id, deck.id)}
+                        ${renderDeckSection('New', newCards, 'bg-slate-100 text-slate-500', folder.id, deck.id)}
+                        ${renderDeckSection('Learned', learnedCards, 'bg-emerald-50 text-emerald-600', folder.id, deck.id)}
+                        ${!deck.cards.length ? '<p class="text-center text-slate-400 py-10">No cards yet. Add some!</p>' : ''}
+                    </div>
+                `;
+            }
+            else if (currentPath.view === 'practice') renderPractice(container);
+        }
+
+        function renderDeckSection(title, list, colorClass, folderId, deckId) {
+            if (!list.length) return '';
+            return `<div>
+                <h4 class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 ml-1">${title}</h4>
+                <div class="grid grid-cols-2 gap-3">
+                    ${list.map(c => `
+                        <div class="p-4 ${colorClass} rounded-2xl text-sm font-semibold border border-transparent hover:border-current/10 transition-all relative">
+                            <div class="flex items-start justify-between gap-2">
+                                <span class="truncate flex-1">${c.front}</span>
+                                <div class="item-menu-btn flex-shrink-0">
+                                    <button onclick="toggleItemMenu(event, 'menu-card-${c.id}')" class="w-6 h-6 rounded-full hover:bg-white/50 flex items-center justify-center opacity-50 hover:opacity-100 transition-all">
+                                        <i class="fas fa-ellipsis-v text-xs"></i>
+                                    </button>
+                                    <div id="menu-card-${c.id}" class="item-menu-dropdown">
+                                        <button onclick="openEditModal('card', '${c.id}', '${folderId}', '${deckId}')"><i class="fas fa-pen text-slate-400"></i> Edit</button>
+                                        <button onclick="deleteItem('card', '${c.id}', '${folderId}', '${deckId}')" class="delete-btn"><i class="fas fa-trash"></i> Delete</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+        }
+
+        // --- PRACTICE LOGIC (Spaced Repetition with 3 Rounds) ---
+        function startPractice(deckId) {
+            const folder = state.folders.find(f => f.id === currentPath.folderId);
+            const deck = folder.decks.find(d => d.id === deckId);
+            
+            // Get due cards (new or past due date)
+            const now = Date.now();
+            const dueCards = deck.cards.filter(c => 
+                c.reviews === 0 || c.interval === 0 || (c.nextReview && c.nextReview <= now)
+            );
+            
+            if (!dueCards.length) return alert("No cards due for review!");
+            
+            practiceSession = { 
+                round: 1,
+                maxRounds: 3,
+                cards: [...dueCards].sort(() => Math.random() - 0.5),
+                currentIndex: 0, 
+                roundResults: {},    // { cardId: 'again'|'hard'|'good'|'easy' }
+                cardsForNextRound: []
+            };
+            navigate('practice', currentPath.folderId, deckId);
+        }
+
+        function renderPractice(container) {
+            const card = practiceSession.cards[practiceSession.currentIndex];
+            const totalInRound = practiceSession.cards.length;
+            const currentPos = practiceSession.currentIndex + 1;
+            
+            // Progress dots for current round
+            let dots = practiceSession.cards.map((c, i) => {
+                let color = 'bg-slate-200';
+                const result = practiceSession.roundResults[c.id];
+                if (result === 'again') color = 'bg-rose-500';
+                if (result === 'hard') color = 'bg-amber-500';
+                if (result === 'good') color = 'bg-emerald-500';
+                if (result === 'easy') color = 'bg-blue-500';
+                return `<span class="progress-dot ${color}"></span>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="text-center mb-4">
+                    <span class="text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                        Round ${practiceSession.round}/${practiceSession.maxRounds}
+                    </span>
+                </div>
+                <div class="flex justify-center mb-8">${dots}</div>
+                <div class="relative h-80 w-full perspective-1000">
+                    <div id="flashcard" class="card-inner relative w-full h-full shadow-2xl rounded-[2.5rem]">
+                        <div class="card-front bg-white rounded-[2.5rem] flex items-center justify-center p-10 text-center border border-slate-50">
+                            <h2 class="text-3xl font-bold text-slate-800">${card.front}</h2>
+                        </div>
+                        <div class="card-back bg-indigo-600 rounded-[2.5rem] flex items-center justify-center p-10 text-center text-white">
+                            <h2 class="text-3xl font-bold">${card.back}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div id="practice-controls" class="mt-10 space-y-4">
+                    <button onclick="flipCard()" id="show-answer-btn" class="w-full py-5 bg-white border-2 border-indigo-50 text-indigo-600 font-black rounded-3xl shadow-sm hover:bg-indigo-50 transition-all">SHOW ANSWER</button>
+                    <div class="hidden grid grid-cols-4 gap-2" id="action-buttons">
+                        <button onclick="handleSRAnswer('again')" class="py-4 bg-rose-50 text-rose-600 font-bold rounded-2xl border border-rose-100 text-sm">
+                            Again
+                        </button>
+                        <button onclick="handleSRAnswer('hard')" class="py-4 bg-amber-50 text-amber-600 font-bold rounded-2xl border border-amber-100 text-sm">
+                            Hard
+                        </button>
+                        <button onclick="handleSRAnswer('good')" class="py-4 bg-emerald-50 text-emerald-600 font-bold rounded-2xl border border-emerald-100 text-sm">
+                            Good
+                        </button>
+                        <button onclick="handleSRAnswer('easy')" class="py-4 bg-blue-50 text-blue-600 font-bold rounded-2xl border border-blue-100 text-sm">
+                            Easy
+                        </button>
+                    </div>
+                </div>
+            `;
+            setupSwipeHandlers();
+        }
+
+        function flipCard() {
+            document.getElementById('flashcard').classList.add('card-flipped');
+            document.getElementById('show-answer-btn').classList.add('hidden');
+            document.getElementById('action-buttons').classList.remove('hidden');
+        }
+
+        function handleSRAnswer(rating) {
+            const sessionCard = practiceSession.cards[practiceSession.currentIndex];
+            const card = state.folders.find(f => f.id === currentPath.folderId)
+                .decks.find(d => d.id === currentPath.deckId)
+                .cards.find(c => c.id === sessionCard.id);
+            
+            // Calculate new interval based on rating
+            const now = Date.now();
+            const DAY = 24 * 60 * 60 * 1000;
+            
+            card.reviews = (card.reviews || 0) + 1;
+            
+            switch(rating) {
+                case 'again':
+                    card.interval = 0;
+                    card.ease = Math.max(1.3, (card.ease || 2.5) - 0.2);
+                    card.nextReview = now + (10 * 60 * 1000); // 10 minutes
+                    practiceSession.cardsForNextRound.push(sessionCard);
+                    break;
+                case 'hard':
+                    card.interval = Math.max(1, Math.round((card.interval || 1) * 1.2));
+                    card.ease = Math.max(1.3, (card.ease || 2.5) - 0.15);
+                    card.nextReview = now + (card.interval * DAY);
+                    practiceSession.cardsForNextRound.push(sessionCard);
+                    break;
+                case 'good':
+                    card.interval = card.interval === 0 ? 1 : Math.round((card.interval || 1) * (card.ease || 2.5));
+                    card.nextReview = now + (card.interval * DAY);
+                    break;
+                case 'easy':
+                    card.interval = card.interval === 0 ? 4 : Math.round((card.interval || 1) * (card.ease || 2.5) * 1.3);
+                    card.ease = (card.ease || 2.5) + 0.15;
+                    card.nextReview = now + (card.interval * DAY);
+                    break;
+            }
+            
+            practiceSession.roundResults[sessionCard.id] = rating;
+            practiceSession.currentIndex++;
+            
+            // Check if round is complete
+            if (practiceSession.currentIndex >= practiceSession.cards.length) {
+                // Check if we need more rounds
+                if (practiceSession.cardsForNextRound.length > 0 && practiceSession.round < practiceSession.maxRounds) {
+                    // Start next round with difficult cards
+                    practiceSession.round++;
+                    practiceSession.cards = [...practiceSession.cardsForNextRound].sort(() => Math.random() - 0.5);
+                    practiceSession.cardsForNextRound = [];
+                    practiceSession.currentIndex = 0;
+                    practiceSession.roundResults = {};
+                    render();
+                } else {
+                    // Practice complete
+                    saveState();
+                    navigate('deck', currentPath.folderId, currentPath.deckId);
+                }
+            } else {
+                render();
+            }
+        }
+
+        function setupSwipeHandlers() {
+            const card = document.getElementById('flashcard');
+            card.addEventListener('click', (e) => {
+                if (!card.classList.contains('card-flipped')) return flipCard();
+            });
+        }
+
+        render();
+        document.getElementById('fab').onclick = toggleFabMenu;
+    </script>
+</body>
+</html>
