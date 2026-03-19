@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FlashFlow - Study Smart</title>
     <link rel="icon" type="image/png" href="flashflow-favicon.png">
+    <link rel="apple-touch-icon" href="flashflow-favicon.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="FlashFlow">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -358,10 +363,61 @@
 
         const saveState = () => localStorage.setItem('ff_v2', JSON.stringify(state));
 
-        function navigate(view, fId = null, dId = null) {
+        function navigate(view, fId = null, dId = null, fromPopState = false) {
             currentPath = { view, folderId: fId, deckId: dId };
+            if (!fromPopState) {
+                history.pushState({ view, folderId: fId, deckId: dId }, '');
+            }
             render();
         }
+
+        // Initialize history state for the home view
+        history.replaceState({ view: 'home', folderId: null, deckId: null }, '');
+
+        // Handle device/browser back button
+        window.addEventListener('popstate', function(e) {
+            // Close alert overlay if open
+            const alertOverlay = document.getElementById('alert-overlay');
+            if (alertOverlay.classList.contains('show')) {
+                closeAlert(false);
+                history.pushState(e.state || currentPath, '');
+                return;
+            }
+
+            // Close card preview overlay if open
+            const previewOverlay = document.getElementById('card-preview-overlay');
+            if (previewOverlay.classList.contains('show')) {
+                closeCardPreview();
+                history.pushState(e.state || currentPath, '');
+                return;
+            }
+
+            // Close modal overlay if open
+            const modalOverlay = document.getElementById('modal-overlay');
+            if (modalOverlay.classList.contains('flex')) {
+                closeModal();
+                history.pushState(e.state || currentPath, '');
+                return;
+            }
+
+            // Close FAB menu if open
+            const fabMenu = document.getElementById('fab-menu');
+            if (!fabMenu.classList.contains('hidden')) {
+                toggleFabMenu();
+                history.pushState(e.state || currentPath, '');
+                return;
+            }
+
+            // Navigate back through views
+            if (e.state) {
+                navigate(e.state.view, e.state.folderId, e.state.deckId, true);
+            } else {
+                // Fallback: go back within app hierarchy
+                if (currentPath.view !== 'home') {
+                    goBack();
+                }
+            }
+        });
 
         function showAlert(message) {
             return new Promise(resolve => {
@@ -885,22 +941,37 @@
                     </button>
                     ${subtitle}
                     <div class="space-y-8">
-                        ${renderDeckSection('Due Today', dueCards, 'bg-amber-50 text-amber-600', folder.id, deck.id)}
-                        ${renderDeckSection('New', newCards, 'bg-slate-100 text-slate-500', folder.id, deck.id)}
-                        ${renderDeckSection('Learned', learnedCards, 'bg-emerald-50 text-emerald-600', folder.id, deck.id)}
+                        ${renderDeckSection('Mastered', deck.cards.filter(c => c.reviews > 0 && c.correctCount !== undefined && c.correctCount > 0 && c.correctCount >= c.reviews), folder.id, deck.id)}
+                        ${renderDeckSection('New', deck.cards.filter(c => !c.reviews || c.reviews === 0), folder.id, deck.id)}
+                        ${renderDeckSection('Needs Work', deck.cards.filter(c => c.reviews > 0 && !(c.correctCount !== undefined && c.correctCount > 0 && c.correctCount >= c.reviews)), folder.id, deck.id)}
                     </div>
                 `;
             }
             else if (currentPath.view === 'practice') renderPractice(container);
         }
 
-        function renderDeckSection(title, list, colorClass, folderId, deckId) {
+        function getCardColor(card) {
+            // Grey: never practiced
+            if (!card.reviews || card.reviews === 0) {
+                return 'bg-slate-100 text-slate-500';
+            }
+            // Green: went well on all rounds
+            if (card.correctCount !== undefined && card.correctCount > 0 && card.correctCount >= card.reviews) {
+                return 'bg-emerald-50 text-emerald-600';
+            }
+            // Red: mixed results (had some wrong answers)
+            return 'bg-red-50 text-red-600';
+        }
+
+        function renderDeckSection(title, list, folderId, deckId) {
             if (!list.length) return '';
             return `<div>
                 <h4 class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 ml-1">${title}</h4>
                 <div class="grid grid-cols-2 gap-3">
-                    ${list.map(c => `
-                        <div class="p-4 ${c.correctCount !== undefined && c.correctCount < 2 ? 'bg-red-50 text-red-600' : colorClass} rounded-2xl text-sm font-semibold border border-transparent hover:border-current/10 transition-all relative cursor-pointer" onclick="openCardPreview('${c.front.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${c.back.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+                    ${list.map(c => {
+                        const cardColor = getCardColor(c);
+                        return `
+                        <div class="p-4 ${cardColor} rounded-2xl text-sm font-semibold border border-transparent hover:border-current/10 transition-all relative cursor-pointer" onclick="openCardPreview('${c.front.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${c.back.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
                             <div class="flex items-start justify-between gap-2">
                                 <span class="truncate flex-1">${c.front}</span>
                                 <div class="item-menu-btn flex-shrink-0">
@@ -914,8 +985,8 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    `).join('')}
+                        </div>`;
+                    }).join('')}
                 </div>
             </div>`;
         }
