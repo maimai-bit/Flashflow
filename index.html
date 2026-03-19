@@ -941,9 +941,9 @@
                     </button>
                     ${subtitle}
                     <div class="space-y-8">
-                        ${renderDeckSection('Mastered', deck.cards.filter(c => c.reviews > 0 && c.correctCount !== undefined && c.correctCount > 0 && c.correctCount >= c.reviews), folder.id, deck.id)}
+                        ${renderDeckSection('Mastered', deck.cards.filter(c => c.reviews > 0 && (c.ease || 2.5) >= 2.5), folder.id, deck.id)}
                         ${renderDeckSection('New', deck.cards.filter(c => !c.reviews || c.reviews === 0), folder.id, deck.id)}
-                        ${renderDeckSection('Needs Work', deck.cards.filter(c => c.reviews > 0 && !(c.correctCount !== undefined && c.correctCount > 0 && c.correctCount >= c.reviews)), folder.id, deck.id)}
+                        ${renderDeckSection('Needs Work', deck.cards.filter(c => c.reviews > 0 && (c.ease || 2.5) < 2.5), folder.id, deck.id)}
                     </div>
                 `;
             }
@@ -955,11 +955,11 @@
             if (!card.reviews || card.reviews === 0) {
                 return 'bg-slate-100 text-slate-500';
             }
-            // Green: went well on all rounds
-            if (card.correctCount !== undefined && card.correctCount > 0 && card.correctCount >= card.reviews) {
+            // Green: ease >= 2.5 means the card has been going well across all sessions
+            if ((card.ease || 2.5) >= 2.5) {
                 return 'bg-emerald-50 text-emerald-600';
             }
-            // Red: mixed results (had some wrong answers)
+            // Red: ease dropped below 2.5, meaning wrong answers dragged it down
             return 'bg-red-50 text-red-600';
         }
 
