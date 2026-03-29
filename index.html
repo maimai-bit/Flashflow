@@ -311,16 +311,17 @@
             </button>
             <div class="card-preview-row card-preview-front">
                 <span id="preview-front"></span>
-                <button class="speak-btn" onclick="speakText(document.getElementById('preview-front').textContent)">
+                <button class="speak-btn" onclick="speakText(document.getElementById('preview-front').textContent, document.getElementById('preview-folder-name').value)">
                     <i class="fas fa-volume-up text-slate-500"></i>
                 </button>
             </div>
             <div class="card-preview-row card-preview-back">
                 <span id="preview-back"></span>
-                <button class="speak-btn" onclick="speakText(document.getElementById('preview-back').textContent)">
+                <button class="speak-btn" onclick="speakText(document.getElementById('preview-back').textContent, document.getElementById('preview-folder-name').value)">
                     <i class="fas fa-volume-up text-indigo-400"></i>
                 </button>
             </div>
+            <input type="hidden" id="preview-folder-name" value="">
         </div>
     </div>
 
@@ -1014,8 +1015,10 @@
                 <div class="grid grid-cols-2 gap-3">
                     ${list.map(c => {
                         const cardColor = getCardColor(c);
+                        const folder = state.folders.find(f => f.id === folderId);
+                        const folderName = folder ? folder.name.replace(/'/g, "\\'") : '';
                         return `
-                        <div class="p-4 ${cardColor} rounded-2xl text-sm font-semibold border border-transparent hover:border-current/10 transition-all relative cursor-pointer" onclick="openCardPreview('${c.front.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${c.back.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+                        <div class="p-4 ${cardColor} rounded-2xl text-sm font-semibold border border-transparent hover:border-current/10 transition-all relative cursor-pointer" onclick="openCardPreview('${c.front.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${c.back.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${folderName}')">
                             <div class="flex items-start justify-between gap-2">
                                 <span class="truncate flex-1">${c.front}</span>
                                 <div class="item-menu-btn flex-shrink-0">
@@ -1090,13 +1093,13 @@
                     <div id="flashcard" class="card-inner relative w-full h-full shadow-2xl rounded-[2.5rem]">
                         <div class="card-front bg-white rounded-[2.5rem] flex flex-col items-center justify-center p-10 text-center border border-slate-50">
                             <h2 class="text-3xl font-bold text-slate-800 mb-4">${card.front}</h2>
-                            <button onclick="event.stopPropagation(); speakText('${card.front.replace(/'/g, "\\'")}')" class="speak-btn">
+                            <button onclick="event.stopPropagation(); speakText('${card.front.replace(/'/g, "\\'")}', '${state.folders.find(f => f.id === currentPath.folderId)?.name.replace(/'/g, "\\'")}')" class="speak-btn">
                                 <i class="fas fa-volume-up text-slate-400"></i>
                             </button>
                         </div>
                         <div class="card-back bg-indigo-600 rounded-[2.5rem] flex flex-col items-center justify-center p-10 text-center text-white">
                             <h2 class="text-3xl font-bold mb-4">${card.back}</h2>
-                            <button onclick="event.stopPropagation(); speakText('${card.back.replace(/'/g, "\\'")}')" class="speak-btn" style="background: rgba(255,255,255,0.2)">
+                            <button onclick="event.stopPropagation(); speakText('${card.back.replace(/'/g, "\\'")}', '${state.folders.find(f => f.id === currentPath.folderId)?.name.replace(/'/g, "\\'")}')" class="speak-btn" style="background: rgba(255,255,255,0.2)">
                                 <i class="fas fa-volume-up text-white"></i>
                             </button>
                         </div>
@@ -1204,8 +1207,35 @@
         }
 
         // --- TEXT TO SPEECH (Multi-language) ---
-        function detectLanguage(text) {
-            // Language detection based on character ranges
+        function detectLanguage(text, folderName = '') {
+            // 1. Priority: Check if a language is mentioned in the folder name
+            if (folderName) {
+                const folderLower = folderName.toLowerCase();
+                const languageMap = {
+                    'spanish': 'es', 'espanol': 'es', 'español': 'es',
+                    'french': 'fr', 'francais': 'fr', 'français': 'fr',
+                    'german': 'de', 'deutsch': 'de',
+                    'italian': 'it', 'italiano': 'it',
+                    'portuguese': 'pt', 'portugues': 'pt', 'português': 'pt',
+                    'japanese': 'ja', 'nihongo': 'ja',
+                    'chinese': 'zh', 'mandarin': 'zh', 'zhongwen': 'zh',
+                    'korean': 'ko', 'hangul': 'ko',
+                    'russian': 'ru', 'russian': 'ru',
+                    'arabic': 'ar', 'arabic': 'ar',
+                    'thai': 'th', 'thai': 'th',
+                    'vietnamese': 'vi', 'vietnamese': 'vi',
+                    'greek': 'el', 'greek': 'el',
+                    'hebrew': 'he', 'hebrew': 'he',
+                    'hindi': 'hi', 'hindi': 'hi',
+                    'english': 'en', 'esl': 'en'
+                };
+                
+                for (const [name, code] of Object.entries(languageMap)) {
+                    if (folderLower.includes(name)) return code;
+                }
+            }
+
+            // 2. Fallback: Language detection based on character ranges
             const patterns = [
                 { lang: 'ja', regex: /[\u3040-\u309F\u30A0-\u30FF]/ },           // Japanese (Hiragana/Katakana)
                 { lang: 'zh', regex: /[\u4E00-\u9FFF]/ },                        // Chinese
@@ -1233,10 +1263,10 @@
             return 'en'; // Default to English
         }
 
-        function speakText(text) {
+        function speakText(text, folderName = '') {
             window.speechSynthesis.cancel();
             
-            const lang = detectLanguage(text);
+            const lang = detectLanguage(text, folderName);
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.rate = 0.9;
             utterance.pitch = 1;
@@ -1260,9 +1290,10 @@
         }
 
         // --- CARD PREVIEW ---
-        function openCardPreview(front, back) {
+        function openCardPreview(front, back, folderName = '') {
             document.getElementById('preview-front').textContent = front;
             document.getElementById('preview-back').textContent = back;
+            document.getElementById('preview-folder-name').value = folderName;
             document.getElementById('card-preview-overlay').classList.add('show');
             history.pushState({ cardPreview: true }, '');
         }
