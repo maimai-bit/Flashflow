@@ -433,7 +433,7 @@
 
         function showConfirm(message, onConfirm) {
             const overlay = document.getElementById('alert-overlay');
-            document.getElementById('alert-message').innerText = message;
+            document.getElementById('alert-message').innerHTML = message;
             document.getElementById('alert-buttons').innerHTML = `
                 <button class="alert-btn secondary" onclick="closeAlert(false)">Cancel</button>
                 <button class="alert-btn primary" onclick="closeAlert(true)">Confirm</button>
@@ -851,7 +851,7 @@
                     for (const d of f.decks) {
                         const duplicate = d.cards.find(c => c.front.trim().toLowerCase() === frontLower);
                         if (duplicate) {
-                            showConfirm(`This card already exists in deck "${d.name}" (folder "${f.name}").\n\nDo you still want to create it?`, () => {
+                            showConfirm(`This card already exists at:<div style="display:flex;flex-direction:column;gap:8px;margin:16px 0"><div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:8px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-layer-group" style="color:#6366f1;font-size:14px"></i></span><span style="color:#6366f1;font-weight:700">${d.name}</span></div><div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:8px;background:#eef2ff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-folder" style="color:#6366f1;font-size:14px"></i></span><span style="color:#6366f1;font-weight:700">${f.name}</span></div></div>Do you still want to create it?`, () => {
                                 saveNewCard(targetDeck, front, back, uid);
                             });
                             return;
