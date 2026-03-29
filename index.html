@@ -710,6 +710,7 @@
         }
 
         let movingCard = null;
+        let movingDeck = null;
 
         function openMoveModal(cardId, folderId, deckId) {
             event?.stopPropagation();
@@ -726,6 +727,25 @@
                 <label class="text-xs font-bold text-slate-400 uppercase">Move to</label>
                 ${renderCustomDropdown('folder', 'Select Folder', state.folders, null)}
                 <div class="mt-3">${renderCustomDropdown('deck', 'Select Deck', [], null)}</div>
+            `;
+        }
+
+        function openMoveDeckModal(deckId, folderId) {
+            event?.stopPropagation();
+            document.querySelectorAll('.item-menu-dropdown.show').forEach(m => m.classList.remove('show'));
+            movingDeck = { deckId, fromFolderId: folderId };
+            modalMode = 'moveDeck';
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            const title = document.getElementById('modal-title');
+            dropdownState = { folder: { value: '', isCreating: false }, deck: { value: '', isCreating: false } };
+            overlay.classList.replace('hidden', 'flex');
+            title.innerText = "Move Deck";
+            // Show only other folders (exclude the current one)
+            const availableFolders = state.folders.filter(f => f.id !== folderId);
+            content.innerHTML = `
+                <label class="text-xs font-bold text-slate-400 uppercase">Move to folder</label>
+                ${renderCustomDropdown('folder', 'Select Folder', availableFolders, null)}
             `;
         }
 
@@ -784,6 +804,22 @@
                 targetFolder.decks.push(targetDeck);
             } else if (dVal) {
                 targetDeck = targetFolder.decks.find(d => d.id === dVal);
+            }
+
+            // Move Deck
+            if (modalMode === 'moveDeck' && movingDeck) {
+                if (!targetFolder) return showAlert("Please select a folder");
+                const sourceFolder = state.folders.find(f => f.id === movingDeck.fromFolderId);
+                const deckIndex = sourceFolder.decks.findIndex(d => d.id === movingDeck.deckId);
+                if (deckIndex !== -1) {
+                    const [deck] = sourceFolder.decks.splice(deckIndex, 1);
+                    targetFolder.decks.push(deck);
+                }
+                movingDeck = null;
+                saveState();
+                closeModal();
+                render();
+                return;
             }
 
             // Move Card
@@ -895,6 +931,7 @@
                                 </button>
                                 <div id="menu-deck-${d.id}" class="item-menu-dropdown">
                                     <button onclick="openEditModal('deck', '${d.id}', '${folder.id}')"><i class="fas fa-pen text-slate-400"></i> Edit</button>
+                                    <button onclick="openMoveDeckModal('${d.id}', '${folder.id}')"><i class="fas fa-arrows-alt text-slate-400"></i> Move</button>
                                     <button onclick="deleteItem('deck', '${d.id}', '${folder.id}')" class="delete-btn"><i class="fas fa-trash"></i> Delete</button>
                                 </div>
                             </div>
