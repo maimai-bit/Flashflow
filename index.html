@@ -992,11 +992,18 @@
             if (!card.reviews || card.reviews === 0) {
                 return 'bg-slate-100 text-slate-500';
             }
-            // Green: ease >= 2.5 means the card has been going well across all sessions
+            // Green: last practice was good or easy
+            if (card.lastRating === 'good' || card.lastRating === 'easy') {
+                return 'bg-emerald-50 text-emerald-600';
+            }
+            // Red: last practice was again or hard
+            if (card.lastRating === 'again' || card.lastRating === 'hard') {
+                return 'bg-red-50 text-red-600';
+            }
+            // Fallback: use ease for older cards without lastRating
             if ((card.ease || 2.5) >= 2.5) {
                 return 'bg-emerald-50 text-emerald-600';
             }
-            // Red: ease dropped below 2.5, meaning wrong answers dragged it down
             return 'bg-red-50 text-red-600';
         }
 
@@ -1161,6 +1168,7 @@
             }
             
             practiceSession.roundResults[sessionCard.id] = rating;
+            card.lastRating = rating;
             practiceSession.currentIndex++;
             
             // Check if round is complete
