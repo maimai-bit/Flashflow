@@ -509,12 +509,12 @@
             render(); // Re-render to show selection highlights
         }
 
-        function exitSelectMode() {
+        function exitSelectMode(shouldRender = true) {
             selectMode = false;
             selectedItems.clear();
             selectionType = null;
             document.getElementById('selection-action-bar').classList.replace('translate-y-0', 'translate-y-full');
-            render();
+            if (shouldRender) render();
         }
 
         function handleItemClick(event, defaultAction, type, id, fId, sfId, dId) {
@@ -570,6 +570,11 @@
             } else if (selectionType === 'subfolder') {
                 openMoveSubfolderModal(Array.from(selectedItems.values()));
             }
+        }
+
+        function setModalSaveLabel(label = 'Save') {
+            const saveBtn = document.getElementById('modal-save-btn');
+            if (saveBtn) saveBtn.innerText = label;
         }
 
         function showConfirm(message, onConfirm) {
@@ -636,6 +641,7 @@
             const title = document.getElementById('modal-title');
             
             overlay.classList.replace('hidden', 'flex');
+            setModalSaveLabel('Save');
             content.innerHTML = '';
 
             if (mode === 'folder') {
@@ -861,6 +867,7 @@
         function closeModal() {
             document.getElementById('modal-overlay').classList.replace('flex', 'hidden');
             editingItem = null;
+            setModalSaveLabel('Save');
         }
 
         let editingItem = null; // { type: 'folder'|'deck'|'card', id, folderId?, deckId? }
@@ -891,6 +898,7 @@
             const title = document.getElementById('modal-title');
             
             overlay.classList.replace('hidden', 'flex');
+            setModalSaveLabel('Save');
             
             if (type === 'folder') {
                 const folder = state.folders.find(f => f.id === id);
@@ -1017,10 +1025,20 @@
             };
 
             return `
-                <label class="text-xs font-bold text-slate-400 uppercase">Destination</label>
-                ${renderCustomDropdown('folder', 'Select Folder', state.folders, folderId)}
-                <div class="mt-3">${renderCustomDropdown('subfolder', 'Select Sub-folder', subfolders, safeSubfolderId)}</div>
-                ${includeDeck ? `<div class="mt-3">${renderCustomDropdown('deck', 'Select Deck', decks, safeDeckId)}</div>` : ''}
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase">Destination Folder</label>
+                    <div class="mt-2">${renderCustomDropdown('folder', 'Select Folder', state.folders, folderId)}</div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase">Destination Sub-folder</label>
+                    <div class="mt-2">${renderCustomDropdown('subfolder', 'Select Sub-folder', subfolders, safeSubfolderId)}</div>
+                </div>
+                ${includeDeck ? `
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 uppercase">Destination Deck</label>
+                        <div class="mt-2">${renderCustomDropdown('deck', 'Select Deck', decks, safeDeckId)}</div>
+                    </div>
+                ` : ''}
             `;
         }
 
@@ -1034,8 +1052,13 @@
             return renderMoveLocationFields(false, source.folderId || currentPath.folderId, source.subfolderId || 'none');
         }
 
-        function openMoveModal(cardInput, fId = null, dId = null) {
-            event?.stopPropagation();
+        function stopActiveEvent(evt = null) {
+            const activeEvent = evt || (typeof event !== 'undefined' ? event : null);
+            activeEvent?.stopPropagation?.();
+        }
+
+        function openMoveModal(cardInput, fId = null, dId = null, evt = null) {
+            stopActiveEvent(evt);
             document.querySelectorAll('.item-menu-dropdown.show').forEach(m => m.classList.remove('show'));
             if (!Array.isArray(cardInput)) {
                 movingCards = [{ id: cardInput, folderId: fId, subfolderId: currentPath.subfolderId, deckId: dId }];
@@ -1048,6 +1071,7 @@
             const content = document.getElementById('modal-content');
             const title = document.getElementById('modal-title');
             document.getElementById('modal-footer').classList.remove('hidden');
+            setModalSaveLabel('Move');
             overlay.classList.replace('hidden', 'flex');
             title.innerText = movingCards.length > 1 ? `Move ${movingCards.length} cards to:` : "Move card to:";
             content.innerHTML = renderMoveCardDestination();
@@ -1060,8 +1084,8 @@
             document.getElementById('modal-footer').classList.remove('hidden');
         }
 
-        function openMoveDeckModal(deckInput, fId = null, sfId = null) {
-            event?.stopPropagation();
+        function openMoveDeckModal(deckInput, fId = null, sfId = null, evt = null) {
+            stopActiveEvent(evt);
             document.querySelectorAll('.item-menu-dropdown.show').forEach(m => m.classList.remove('show'));
             if (!Array.isArray(deckInput)) {
                 movingDecks = [{ id: deckInput, folderId: fId, subfolderId: sfId }];
@@ -1074,8 +1098,9 @@
             const content = document.getElementById('modal-content');
             const title = document.getElementById('modal-title');
             document.getElementById('modal-footer').classList.remove('hidden');
+            setModalSaveLabel('Move');
             overlay.classList.replace('hidden', 'flex');
-            title.innerText = movingDecks.length > 1 ? `Move ${movingDecks.length} decks to:` : "Move deck to:";
+            title.innerText = movingDecks.length > 1 ? `Move ${movingDecks.length} decks to:` : "Move deck to folder or sub-folder:";
             content.innerHTML = renderMoveDeckDestination();
         }
 
@@ -1086,8 +1111,8 @@
             document.getElementById('modal-footer').classList.remove('hidden');
         }
 
-        function openMoveSubfolderModal(subfolderInput, fId = null) {
-            event?.stopPropagation();
+        function openMoveSubfolderModal(subfolderInput, fId = null, evt = null) {
+            stopActiveEvent(evt);
             document.querySelectorAll('.item-menu-dropdown.show').forEach(m => m.classList.remove('show'));
             if (!Array.isArray(subfolderInput)) {
                 movingSubfolders = [{ id: subfolderInput, folderId: fId }];
@@ -1106,6 +1131,7 @@
                 deck: { value: '', isCreating: false }
             };
             document.getElementById('modal-footer').classList.remove('hidden');
+            setModalSaveLabel('Move');
             overlay.classList.replace('hidden', 'flex');
             title.innerText = movingSubfolders.length > 1 ? `Move ${movingSubfolders.length} sub-folders to:` : "Move sub-folder to:";
             content.innerHTML = `
@@ -1231,6 +1257,7 @@
             if (modalMode === 'moveDeck' && movingDecks.length > 0) {
                 if (!targetFolder) return showAlert("Please select a destination folder");
 
+                let movedCurrentDeckLocation = null;
                 for (const moveData of movingDecks) {
                     const sourceFolder = state.folders.find(f => f.id === moveData.folderId);
                     const sourceList = getDeckList(sourceFolder, moveData.subfolderId);
@@ -1241,13 +1268,25 @@
                         if (sourceList === targetList) continue;
                         const [deck] = sourceList.splice(deckIndex, 1);
                         targetList.push(deck);
+                        if (currentPath.view === 'deck' && currentPath.deckId === moveData.id) {
+                            movedCurrentDeckLocation = {
+                                folderId: targetFolder.id,
+                                subfolderId: targetSubfolder?.id || 'none',
+                                deckId: moveData.id
+                            };
+                        }
                     }
                 }
                 movingDecks = [];
                 progressiveTarget = null;
                 saveState();
                 closeModal();
-                exitSelectMode();
+                if (movedCurrentDeckLocation) {
+                    exitSelectMode(false);
+                    navigate('deck', movedCurrentDeckLocation.folderId, movedCurrentDeckLocation.subfolderId, movedCurrentDeckLocation.deckId, true);
+                } else {
+                    exitSelectMode();
+                }
                 return;
             }
 
@@ -1492,6 +1531,12 @@
                 }
                 
                 container.innerHTML = `
+                    <div class="flex justify-end mb-4">
+                        <button onclick="openMoveDeckModal('${deck.id}', '${folder.id}', '${currentPath.subfolderId || 'none'}', event)" class="px-4 py-2 rounded-xl font-bold bg-white border border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 flex items-center gap-2 shadow-sm transition-colors">
+                            <i class="fas fa-arrows-alt text-slate-400"></i>
+                            <span>Move</span>
+                        </button>
+                    </div>
                     <button onclick="startPractice('${deck.id}')" class="w-full py-5 ${buttonClass} text-white rounded-3xl font-black shadow-xl shadow-indigo-100 mb-4 transition-all" ${buttonDisabled ? 'disabled' : ''}>
                         ${buttonText}
                     </button>
