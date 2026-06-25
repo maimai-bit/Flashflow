@@ -304,9 +304,9 @@
     <main id="app-container" class="p-4 pb-24 max-w-2xl mx-auto"></main>
 
     <!-- Card Preview Overlay -->
-    <div id="card-preview-overlay" onclick="closeCardPreview()">
+    <div id="card-preview-overlay" onclick="returnFromCardPreview()">
         <div class="card-preview-content" onclick="event.stopPropagation()">
-            <button class="card-preview-close" onclick="closeCardPreview()">
+            <button class="card-preview-close" onclick="event.stopPropagation(); returnFromCardPreview()">
                 <i class="fas fa-times text-slate-500"></i>
             </button>
             <div class="card-preview-row card-preview-front">
@@ -395,11 +395,20 @@
 
         const saveState = () => localStorage.setItem('ff_v2', JSON.stringify(state));
 
-        function navigate(view, fId = null, sfId = null, dId = null, fromPopState = false) {
+        function getPathState(path = currentPath) {
+            return {
+                view: path.view,
+                folderId: path.folderId || null,
+                subfolderId: path.subfolderId || null,
+                deckId: path.deckId || null
+            };
+        }
+
+        function navigate(view, fId = null, sfId = null, dId = null, replaceHistory = false) {
             currentPath = { view, folderId: fId, subfolderId: sfId, deckId: dId };
-            if (!fromPopState) {
-                history.pushState({ view, folderId: fId, subfolderId: sfId, deckId: dId }, '');
-            }
+            const nextState = getPathState();
+            if (replaceHistory) history.replaceState(nextState, '');
+            else history.pushState(nextState, '');
             render();
         }
 
@@ -410,7 +419,7 @@
         window.addEventListener('popstate', function(e) {
             if (selectMode) {
                 exitSelectMode();
-                history.pushState(e.state || currentPath, '');
+                history.pushState(getPathState(), '');
                 return;
             }
 
@@ -418,7 +427,7 @@
             const alertOverlay = document.getElementById('alert-overlay');
             if (alertOverlay.classList.contains('show')) {
                 closeAlert(false);
-                history.pushState(e.state || currentPath, '');
+                history.pushState(getPathState(), '');
                 return;
             }
 
@@ -426,7 +435,7 @@
             const previewOverlay = document.getElementById('card-preview-overlay');
             if (previewOverlay.classList.contains('show')) {
                 closeCardPreview();
-                history.pushState(e.state || currentPath, '');
+                history.replaceState(getPathState(), '');
                 return;
             }
 
@@ -434,7 +443,7 @@
             const modalOverlay = document.getElementById('modal-overlay');
             if (modalOverlay.classList.contains('flex')) {
                 closeModal();
-                history.pushState(e.state || currentPath, '');
+                history.pushState(getPathState(), '');
                 return;
             }
 
@@ -442,18 +451,13 @@
             const fabMenu = document.getElementById('fab-menu');
             if (!fabMenu.classList.contains('hidden')) {
                 toggleFabMenu();
-                history.pushState(e.state || currentPath, '');
+                history.pushState(getPathState(), '');
                 return;
             }
 
-            // Navigate back through views
-            if (e.state) {
-                navigate(e.state.view, e.state.folderId, e.state.subfolderId, e.state.deckId, true);
-            } else {
-                // Fallback: go back within app hierarchy
-                if (currentPath.view !== 'home') {
-                    goBack();
-                }
+            // Navigate back through views hierarchically
+            if (currentPath.view !== 'home') {
+                goBack(true);
             }
         });
 
@@ -564,9 +568,7 @@
             } else if (selectionType === 'card') {
                 openMoveModal(Array.from(selectedItems.values()));
             } else if (selectionType === 'subfolder') {
-                // Subfolders shouldn't really be moved if they are optional, but if we need to, we can add it later.
-                // Currently user didn't explicitly request subfolder move specifically in the previous plan other than "can be moved along folders", which was already there. Keep it simple.
-                showAlert("Batch moving sub-folders is not supported yet.");
+                openMoveSubfolderModal(Array.from(selectedItems.values()));
             }
         }
 
@@ -593,11 +595,29 @@
             window._confirmCallback = null;
         }
 
-        function goBack() {
-            if (currentPath.view === 'practice') navigate('deck', currentPath.folderId, currentPath.subfolderId, currentPath.deckId);
-            else if (currentPath.view === 'deck') navigate('subfolder', currentPath.folderId, currentPath.subfolderId);
-            else if (currentPath.view === 'subfolder') navigate('folder', currentPath.folderId);
-            else if (currentPath.view === 'folder') navigate('home');
+        function getParentPath(path = currentPath) {
+            if (path.view === 'practice') {
+                return { view: 'deck', folderId: path.folderId, subfolderId: path.subfolderId, deckId: path.deckId };
+            }
+            if (path.view === 'deck') {
+                if (path.subfolderId && path.subfolderId !== 'none') {
+                    return { view: 'subfolder', folderId: path.folderId, subfolderId: path.subfolderId, deckId: null };
+                }
+                return { view: 'folder', folderId: path.folderId, subfolderId: null, deckId: null };
+            }
+            if (path.view === 'subfolder') {
+                return { view: 'folder', folderId: path.folderId, subfolderId: null, deckId: null };
+            }
+            if (path.view === 'folder') {
+                return { view: 'home', folderId: null, subfolderId: null, deckId: null };
+            }
+            return null;
+        }
+
+        function goBack(replaceHistory = true) {
+            const parentPath = getParentPath();
+            if (!parentPath) return;
+            navigate(parentPath.view, parentPath.folderId, parentPath.subfolderId, parentPath.deckId, replaceHistory);
         }
 
         function toggleFabMenu() {
@@ -731,9 +751,15 @@
             // Hide create form if visible
             document.getElementById(`create-form-${type}`)?.classList.remove('show');
             
-            // Update deck dropdown if folder changed
-            if (type === 'folder') updateSubfolderDropdown();
-            if (type === 'subfolder') updateDeckDropdown();
+            if (type === 'folder') {
+                dropdownState.subfolder = { value: 'none', isCreating: false };
+                dropdownState.deck = { value: '', isCreating: false };
+                updateSubfolderDropdown();
+            }
+            if (type === 'subfolder') {
+                dropdownState.deck = { value: '', isCreating: false };
+                updateDeckDropdown();
+            }
         }
 
         function showCreateForm(type) {
@@ -762,29 +788,44 @@
             if (!name) return showAlert(`${type.charAt(0).toUpperCase() + type.slice(1)} name required`);
             
             // Mark as creating new
-            document.getElementById(`sel-${type}`).value = 'NEW_' + type.toUpperCase();
+            const newValue = 'NEW_' + type.toUpperCase();
+            document.getElementById(`sel-${type}`).value = newValue;
             document.getElementById(`dropdown-${type}-text`).innerHTML = `<i class="fas fa-plus text-indigo-500 mr-2"></i>${name}`;
+            dropdownState[type] = { value: newValue, isCreating: true };
             
             // Hide create form
             document.getElementById(`create-form-${type}`).classList.remove('show');
             
-            if (type === 'folder') updateSubfolderDropdown();
-            if (type === 'subfolder') updateDeckDropdown();
+            if (type === 'folder') {
+                dropdownState.subfolder = { value: 'none', isCreating: false };
+                dropdownState.deck = { value: '', isCreating: false };
+                updateSubfolderDropdown();
+            }
+            if (type === 'subfolder') {
+                dropdownState.deck = { value: '', isCreating: false };
+                updateDeckDropdown();
+            }
         }
 
         function updateSubfolderDropdown() {
             const subfolderContainer = document.querySelector('#dropdown-wrapper-subfolder')?.parentElement;
-            if (!subfolderContainer) return;
+            if (!subfolderContainer) {
+                updateDeckDropdown();
+                return;
+            }
             
             const folderId = document.getElementById('sel-folder')?.value;
             let subfolders = [{ id: 'none', name: 'None (Root of Folder)' }];
             
             if (folderId && folderId !== 'NEW_FOLDER') {
                 const folder = state.folders.find(f => f.id === folderId);
-                if (folder) subfolders = [...subfolders, ...folder.subfolders];
+                if (folder) subfolders = getSubfolderItems(folder);
             }
             
-            subfolderContainer.innerHTML = renderCustomDropdown('subfolder', 'Select Sub-folder', subfolders, currentPath.subfolderId || 'none');
+            const preferredId = dropdownState.subfolder.value || currentPath.subfolderId || 'none';
+            const selectedId = subfolders.some(sf => sf.id === preferredId) ? preferredId : 'none';
+            dropdownState.subfolder = { value: selectedId, isCreating: false };
+            subfolderContainer.innerHTML = renderCustomDropdown('subfolder', 'Select Sub-folder', subfolders, selectedId);
             updateDeckDropdown();
         }
 
@@ -799,16 +840,14 @@
             if (folderId && folderId !== 'NEW_FOLDER') {
                 const folder = state.folders.find(f => f.id === folderId);
                 if (folder) {
-                    if (subfolderId === 'none') {
-                        decks = folder.decks;
-                    } else if (subfolderId && subfolderId !== 'NEW_SUBFOLDER') {
-                        const subfolder = folder.subfolders.find(sf => sf.id === subfolderId);
-                        if (subfolder) decks = subfolder.decks;
-                    }
+                    decks = subfolderId === 'NEW_SUBFOLDER' ? [] : getDeckList(folder, subfolderId || 'none');
                 }
             }
             
-            deckContainer.innerHTML = renderCustomDropdown('deck', 'Select Deck', decks, currentPath.deckId);
+            const preferredId = dropdownState.deck.value || currentPath.deckId;
+            const selectedId = decks.some(d => d.id === preferredId) ? preferredId : null;
+            dropdownState.deck = { value: selectedId || '', isCreating: false };
+            deckContainer.innerHTML = renderCustomDropdown('deck', 'Select Deck', decks, selectedId);
         }
 
         // Close dropdowns when clicking outside
@@ -930,7 +969,70 @@
 
         let movingCards = [];
         let movingDecks = [];
+        let movingSubfolders = [];
         let progressiveTarget = null; // 'subfolder', 'folder', 'deck'
+
+        function getFolderById(folderId) {
+            return state.folders.find(f => f.id === folderId) || null;
+        }
+
+        function ensureFolderLists(folder) {
+            if (!folder) return;
+            if (!folder.decks) folder.decks = [];
+            if (!folder.subfolders) folder.subfolders = [];
+        }
+
+        function getSubfolderItems(folder) {
+            ensureFolderLists(folder);
+            return [{ id: 'none', name: 'None (Root of Folder)' }, ...(folder?.subfolders || [])];
+        }
+
+        function getDeckList(folder, subfolderId) {
+            ensureFolderLists(folder);
+            if (!folder) return [];
+            if (!subfolderId || subfolderId === 'none') return folder.decks;
+            const subfolder = folder.subfolders.find(sf => sf.id === subfolderId);
+            if (!subfolder) return [];
+            if (!subfolder.decks) subfolder.decks = [];
+            return subfolder.decks;
+        }
+
+        function getDeckByLocation(folderId, subfolderId, deckId) {
+            const folder = getFolderById(folderId);
+            return getDeckList(folder, subfolderId).find(d => d.id === deckId) || null;
+        }
+
+        function renderMoveLocationFields(includeDeck, selectedFolderId, selectedSubfolderId = 'none', selectedDeckId = null) {
+            const folder = getFolderById(selectedFolderId) || state.folders[0] || null;
+            const folderId = folder?.id || null;
+            const subfolders = getSubfolderItems(folder);
+            const safeSubfolderId = subfolders.some(sf => sf.id === selectedSubfolderId) ? selectedSubfolderId : 'none';
+            const decks = includeDeck ? getDeckList(folder, safeSubfolderId) : [];
+            const safeDeckId = includeDeck && decks.some(d => d.id === selectedDeckId) ? selectedDeckId : null;
+
+            dropdownState = {
+                folder: { value: folderId || '', isCreating: false },
+                subfolder: { value: safeSubfolderId, isCreating: false },
+                deck: { value: safeDeckId || '', isCreating: false }
+            };
+
+            return `
+                <label class="text-xs font-bold text-slate-400 uppercase">Destination</label>
+                ${renderCustomDropdown('folder', 'Select Folder', state.folders, folderId)}
+                <div class="mt-3">${renderCustomDropdown('subfolder', 'Select Sub-folder', subfolders, safeSubfolderId)}</div>
+                ${includeDeck ? `<div class="mt-3">${renderCustomDropdown('deck', 'Select Deck', decks, safeDeckId)}</div>` : ''}
+            `;
+        }
+
+        function renderMoveCardDestination() {
+            const source = movingCards[0] || {};
+            return renderMoveLocationFields(true, source.folderId || currentPath.folderId, source.subfolderId || 'none', source.deckId || currentPath.deckId);
+        }
+
+        function renderMoveDeckDestination() {
+            const source = movingDecks[0] || {};
+            return renderMoveLocationFields(false, source.folderId || currentPath.folderId, source.subfolderId || 'none');
+        }
 
         function openMoveModal(cardInput, fId = null, dId = null) {
             event?.stopPropagation();
@@ -941,58 +1043,20 @@
                 movingCards = cardInput.map(c => ({ id: c.id, folderId: c.folderId, subfolderId: c.subfolderId, deckId: c.deckId }));
             }
             modalMode = 'move';
-            progressiveTarget = null;
+            progressiveTarget = 'deck';
             const overlay = document.getElementById('modal-overlay');
             const content = document.getElementById('modal-content');
             const title = document.getElementById('modal-title');
-            document.getElementById('modal-footer').classList.add('hidden');
-            dropdownState = { folder: { value: '', isCreating: false }, subfolder: { value: '', isCreating: false }, deck: { value: '', isCreating: false } };
+            document.getElementById('modal-footer').classList.remove('hidden');
             overlay.classList.replace('hidden', 'flex');
-            title.innerText = "Move card to:";
-            content.innerHTML = `
-                <div class="flex flex-col gap-3">
-                    <button onclick="setMoveCardTarget('folder')" class="p-4 bg-white border border-slate-100 rounded-2xl text-left font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-4">
-                        <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-folder"></i></div>
-                        <div class="text-lg">folder</div>
-                    </button>
-                    <button onclick="setMoveCardTarget('subfolder')" class="p-4 bg-white border border-slate-100 rounded-2xl text-left font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-4">
-                        <div class="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-folder-open"></i></div>
-                        <div class="text-lg">sub-folder</div>
-                    </button>
-                    <button onclick="setMoveCardTarget('deck')" class="p-4 bg-white border border-slate-100 rounded-2xl text-left font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-4">
-                        <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-layer-group"></i></div>
-                        <div class="text-lg">deck</div>
-                    </button>
-                </div>
-            `;
+            title.innerText = movingCards.length > 1 ? `Move ${movingCards.length} cards to:` : "Move card to:";
+            content.innerHTML = renderMoveCardDestination();
         }
 
         function setMoveCardTarget(target) {
-            progressiveTarget = target;
+            progressiveTarget = 'deck';
             const content = document.getElementById('modal-content');
-            if (target === 'deck') {
-                const folder = state.folders.find(f => f.id === movingCards[0].folderId);
-                const sfId = movingCards[0].subfolderId;
-                let decks = sfId === 'none' || !sfId ? folder.decks : folder.subfolders.find(sf => sf.id === sfId).decks;
-                content.innerHTML = `
-                    <label class="text-xs font-bold text-slate-400 uppercase">Select Deck</label>
-                    <div class="mt-3">${renderCustomDropdown('deck', 'Select Deck', decks, null)}</div>
-                `;
-            } else if (target === 'subfolder') {
-                const folder = state.folders.find(f => f.id === movingCards[0].folderId);
-                const subfolders = [{ id: 'none', name: 'None (Root of Folder)' }, ...folder.subfolders];
-                content.innerHTML = `
-                    <label class="text-xs font-bold text-slate-400 uppercase">Select Destination</label>
-                    <div class="mt-3">${renderCustomDropdown('subfolder', 'Select Sub-folder', subfolders, null)}</div>
-                    <div class="mt-3">${renderCustomDropdown('deck', 'Select Deck', [], null)}</div>
-                `;
-            } else if (target === 'folder') {
-                content.innerHTML = `
-                    <label class="text-xs font-bold text-slate-400 uppercase">Select Destination</label>
-                    ${renderCustomDropdown('folder', 'Select Folder', state.folders, null)}
-                    <div class="mt-3">${renderCustomDropdown('deck', 'Select Deck', [], null)}</div>
-                `;
-            }
+            content.innerHTML = renderMoveCardDestination();
             document.getElementById('modal-footer').classList.remove('hidden');
         }
 
@@ -1005,45 +1069,49 @@
                 movingDecks = deckInput.map(d => ({ id: d.id, folderId: d.folderId, subfolderId: d.subfolderId }));
             }
             modalMode = 'moveDeck';
-            progressiveTarget = null;
+            progressiveTarget = 'subfolder';
             const overlay = document.getElementById('modal-overlay');
             const content = document.getElementById('modal-content');
             const title = document.getElementById('modal-title');
-            document.getElementById('modal-footer').classList.add('hidden');
-            dropdownState = { folder: { value: '', isCreating: false }, subfolder: { value: '', isCreating: false }, deck: { value: '', isCreating: false } };
+            document.getElementById('modal-footer').classList.remove('hidden');
             overlay.classList.replace('hidden', 'flex');
-            title.innerText = "Move deck to:";
-            content.innerHTML = `
-                <div class="flex flex-col gap-3">
-                    <button onclick="setMoveDeckTarget('folder')" class="p-4 bg-white border border-slate-100 rounded-2xl text-left font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-4">
-                        <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-folder"></i></div>
-                        <div class="text-lg">folder</div>
-                    </button>
-                    <button onclick="setMoveDeckTarget('subfolder')" class="p-4 bg-white border border-slate-100 rounded-2xl text-left font-bold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-4">
-                        <div class="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center text-lg"><i class="fas fa-folder-open"></i></div>
-                        <div class="text-lg">sub-folder</div>
-                    </button>
-                </div>
-            `;
+            title.innerText = movingDecks.length > 1 ? `Move ${movingDecks.length} decks to:` : "Move deck to:";
+            content.innerHTML = renderMoveDeckDestination();
         }
 
         function setMoveDeckTarget(target) {
             progressiveTarget = target;
             const content = document.getElementById('modal-content');
-            if (target === 'subfolder') {
-                const folder = state.folders.find(f => f.id === movingDecks[0].folderId);
-                const subfolders = [{ id: 'none', name: 'None (Root of Folder)' }, ...folder.subfolders];
-                content.innerHTML = `
-                    <label class="text-xs font-bold text-slate-400 uppercase">Select Sub-folder</label>
-                    <div class="mt-3">${renderCustomDropdown('subfolder', 'Select Sub-folder', subfolders, null)}</div>
-                `;
-            } else if (target === 'folder') {
-                content.innerHTML = `
-                    <label class="text-xs font-bold text-slate-400 uppercase">Select Destination</label>
-                    ${renderCustomDropdown('folder', 'Select Folder', state.folders, null)}
-                `;
-            }
+            content.innerHTML = renderMoveDeckDestination();
             document.getElementById('modal-footer').classList.remove('hidden');
+        }
+
+        function openMoveSubfolderModal(subfolderInput, fId = null) {
+            event?.stopPropagation();
+            document.querySelectorAll('.item-menu-dropdown.show').forEach(m => m.classList.remove('show'));
+            if (!Array.isArray(subfolderInput)) {
+                movingSubfolders = [{ id: subfolderInput, folderId: fId }];
+            } else {
+                movingSubfolders = subfolderInput.map(sf => ({ id: sf.id, folderId: sf.folderId }));
+            }
+            modalMode = 'moveSubfolder';
+            progressiveTarget = 'folder';
+            const overlay = document.getElementById('modal-overlay');
+            const content = document.getElementById('modal-content');
+            const title = document.getElementById('modal-title');
+            const source = movingSubfolders[0] || {};
+            dropdownState = {
+                folder: { value: source.folderId || currentPath.folderId || '', isCreating: false },
+                subfolder: { value: '', isCreating: false },
+                deck: { value: '', isCreating: false }
+            };
+            document.getElementById('modal-footer').classList.remove('hidden');
+            overlay.classList.replace('hidden', 'flex');
+            title.innerText = movingSubfolders.length > 1 ? `Move ${movingSubfolders.length} sub-folders to:` : "Move sub-folder to:";
+            content.innerHTML = `
+                <label class="text-xs font-bold text-slate-400 uppercase">Destination Folder</label>
+                ${renderCustomDropdown('folder', 'Select Folder', state.folders, dropdownState.folder.value)}
+            `;
         }
 
         function saveItem() {
@@ -1103,7 +1171,7 @@
             if (fVal === 'NEW_FOLDER' || modalMode === 'folder') {
                 const name = document.getElementById('inp-new-folder')?.value || document.getElementById('inp-folder-name')?.value;
                 if (!name) return showAlert("Folder name required");
-                targetFolder = { id: uid(), name, subfolders: [] };
+                targetFolder = { id: uid(), name, decks: [], subfolders: [] };
                 state.folders.push(targetFolder);
             } else if (fVal) {
                 targetFolder = state.folders.find(f => f.id === fVal);
@@ -1138,29 +1206,41 @@
                 targetDeck = targetFolder.decks.find(d => d.id === dVal);
             }
 
+            // Move Subfolder
+            if (modalMode === 'moveSubfolder' && movingSubfolders.length > 0) {
+                if (!targetFolder) return showAlert("Please select a destination folder");
+
+                for (const moveData of movingSubfolders) {
+                    const sourceFolder = state.folders.find(f => f.id === moveData.folderId);
+                    if (!sourceFolder || sourceFolder.id === targetFolder.id) continue;
+                    const subfolderIndex = sourceFolder.subfolders.findIndex(sf => sf.id === moveData.id);
+                    if (subfolderIndex !== -1) {
+                        const [subfolder] = sourceFolder.subfolders.splice(subfolderIndex, 1);
+                        targetFolder.subfolders.push(subfolder);
+                    }
+                }
+                movingSubfolders = [];
+                progressiveTarget = null;
+                saveState();
+                closeModal();
+                exitSelectMode();
+                return;
+            }
+
             // Move Deck
             if (modalMode === 'moveDeck' && movingDecks.length > 0) {
-                if (!targetFolder && progressiveTarget === 'folder') return showAlert("Please select a destination folder");
-                
-                // If the user selected 'subfolder' as the target type, the targetFolder is implicitly the current folder
-                if (progressiveTarget === 'subfolder') {
-                    targetFolder = state.folders.find(f => f.id === movingDecks[0].folderId);
-                }
+                if (!targetFolder) return showAlert("Please select a destination folder");
 
                 for (const moveData of movingDecks) {
                     const sourceFolder = state.folders.find(f => f.id === moveData.folderId);
-                    
-                    let sourceList = sourceFolder.decks;
-                    if (moveData.subfolderId !== 'none' && moveData.subfolderId) {
-                        const sourceSubfolder = sourceFolder.subfolders.find(sf => sf.id === moveData.subfolderId);
-                        sourceList = sourceSubfolder.decks;
-                    }
+                    const sourceList = getDeckList(sourceFolder, moveData.subfolderId);
                     
                     const deckIndex = sourceList.findIndex(d => d.id === moveData.id);
                     if (deckIndex !== -1) {
+                        const targetList = getDeckList(targetFolder, targetSubfolder?.id || 'none');
+                        if (sourceList === targetList) continue;
                         const [deck] = sourceList.splice(deckIndex, 1);
-                        if (targetSubfolder) targetSubfolder.decks.push(deck);
-                        else targetFolder.decks.push(deck);
+                        targetList.push(deck);
                     }
                 }
                 movingDecks = [];
@@ -1173,26 +1253,11 @@
 
             // Move Card
             if (modalMode === 'move' && movingCards.length > 0) {
-                if (progressiveTarget === 'deck') {
-                    // targetFolder is the current one.
-                    targetFolder = state.folders.find(f => f.id === movingCards[0].folderId);
-                }
-                if (progressiveTarget === 'subfolder') {
-                    targetFolder = state.folders.find(f => f.id === movingCards[0].folderId);
-                }
-
-                if (!targetFolder || (!targetSubfolder && sfVal !== 'none' && progressiveTarget !== 'deck' && progressiveTarget !== 'folder') || !targetDeck) return showAlert("Please select a destination");
+                if (!targetFolder || !targetDeck) return showAlert("Please select a destination deck");
                 
                 for (const moveData of movingCards) {
-                    const sourceFolder = state.folders.find(f => f.id === moveData.folderId);
-                    
-                    let sourceDeck;
-                    if (moveData.subfolderId === 'none' || !moveData.subfolderId) {
-                        sourceDeck = sourceFolder.decks.find(d => d.id === moveData.deckId);
-                    } else {
-                        const sourceSubfolder = sourceFolder.subfolders.find(sf => sf.id === moveData.subfolderId);
-                        sourceDeck = sourceSubfolder.decks.find(d => d.id === moveData.deckId);
-                    }
+                    const sourceDeck = getDeckByLocation(moveData.folderId, moveData.subfolderId, moveData.deckId);
+                    if (!sourceDeck || sourceDeck === targetDeck) continue;
                     
                     const cardIndex = sourceDeck.cards.findIndex(c => c.id === moveData.id);
                     if (cardIndex !== -1) {
@@ -1317,6 +1382,7 @@
                             </button>
                             <div id="menu-subfolder-${sf.id}" class="item-menu-dropdown">
                                 <button onclick="openEditModal('subfolder', '${sf.id}', '${folder.id}')"><i class="fas fa-pen text-slate-400"></i> Edit</button>
+                                <button onclick="openMoveSubfolderModal('${sf.id}', '${folder.id}')"><i class="fas fa-arrows-alt text-slate-400"></i> Move</button>
                                 <button onclick="deleteItem('subfolder', '${sf.id}', '${folder.id}')" class="delete-btn"><i class="fas fa-trash"></i> Delete</button>
                             </div>
                         </div>
@@ -1756,7 +1822,7 @@
             document.getElementById('preview-folder-name').value = folderName;
             document.getElementById('preview-subfolder-name').value = subfolderName;
             document.getElementById('card-preview-overlay').classList.add('show');
-            history.pushState({ cardPreview: true }, '');
+            history.pushState({ ...getPathState(), cardPreview: true }, '');
         }
 
         function closeCardPreview() {
@@ -1766,16 +1832,21 @@
             }
         }
 
-        // Handle back button (phone) and Escape key
-        window.addEventListener('popstate', (e) => {
-            if (document.getElementById('card-preview-overlay').classList.contains('show')) {
-                closeCardPreview();
+        function returnFromCardPreview() {
+            if (!document.getElementById('card-preview-overlay').classList.contains('show')) return;
+            if (history.state && history.state.cardPreview) {
+                history.back();
+                return;
             }
-        });
+            closeCardPreview();
+            history.replaceState(getPathState(), '');
+        }
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                closeCardPreview();
+                if (document.getElementById('card-preview-overlay').classList.contains('show')) {
+                    returnFromCardPreview();
+                }
             }
         });
 
